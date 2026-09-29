@@ -57,10 +57,12 @@ test('storage denied / quota exceeded reports failure without claiming save succ
  assert.throws(()=>O.storage.save('drafts',{name:'新',title:'題',body:'本文'}),/保存できません/);
  context.localStorage.setItem=original;
 });
-test('stamp IDs are unique and independent of artwork; common templates are empty',()=>{
+test('stamp IDs are unique and independent of artwork; clan common template is bundled',()=>{
  assert.equal(O.stamps.length,145);assert.equal(new Set(O.stamps.map(s=>s.id)).size,145);
  assert.ok([13,30,46].every(id=>O.stamps.some(s=>s.id===id)));
- assert.equal(O.commonTemplates.length,0);
+ assert.equal(O.commonTemplates.length,1);
+ assert.equal(O.commonTemplates[0].title,'戦線・籠城情報');
+ assert.match(O.commonTemplates[0].body,/7:00-11:00：1列目/);
 });
 
 test('v0.1 storage remains readable and literal game newline codes survive save/load',()=>{
@@ -77,4 +79,18 @@ test('v0.1 storage remains readable and literal game newline codes survive save/
 test('palette includes every sequential ID through the last visible entry',()=>{
  assert.deepEqual(plain(O.stamps.map(item=>item.id)),Array.from({length:145},(_,i)=>i+1));
  assert.equal(O.stamps.at(-1).fallbackEmoji,'🈲');
+});
+
+test('v0.3 limits, preview profiles, emoji detection, and corrected stamp mapping',()=>{
+ assert.deepEqual(plain(O.config.limits),{title:10,body:1000});
+ assert.deepEqual(Object.keys(O.config.preview.profiles),['pc','portrait','landscape']);
+ assert.equal(O.config.preview.profiles.portrait.charsPerLine,'約18');
+ assert.equal(O.config.preview.profiles.landscape.charsPerLine,'約19');
+ assert.deepEqual(plain(O.parser.findDirectEmoji('通常文😊 {13} ※注意')),['😊']);
+ assert.deepEqual(plain(O.parser.findDirectEmoji('旗🇯🇵 キー1️⃣')),['🇯🇵','1️⃣']);
+ assert.equal(O.parser.findDirectEmoji('【注意】123,456 {36}').length,0);
+ const byId=id=>O.stamps.find(item=>item.id===id);
+ assert.equal(byId(9).fallbackEmoji,'😙');
+ assert.equal(byId(35).fallbackEmoji,'😚');
+ assert.equal(byId(36).fallbackEmoji,'😘');
 });

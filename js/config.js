@@ -1,9 +1,17 @@
 'use strict';
 window.Ofuregaki = window.Ofuregaki || {};
 Ofuregaki.config = Object.freeze({
-  version: '0.2.0',
+  version: '0.3.0',
   defaultNewlineMode: 'escaped',
-  // Video: about 18 full-width characters per line; narrow screens scale the whole sheet.
-  preview: { sheetWidth: 420, fontSize: 20, lineHeight: 1.5 },
+  limits: { title: 10, body: 1000 },
+  preview: {
+    defaultProfile: 'pc',
+    fontSize: 20, lineHeight: 1.5,
+    profiles: {
+      pc: { label: 'PC', sheetWidth: 420, bodyWidth: 360, charsPerLine: '約18' },
+      portrait: { label: 'スマホ縦', sheetWidth: 420, bodyWidth: 360, charsPerLine: '約18' },
+      landscape: { label: 'スマホ横', sheetWidth: 440, bodyWidth: 380, charsPerLine: '約19' }
+    }
+  },
   storage: { draftsKey: 'ofuregaki.v1.drafts', templatesKey: 'ofuregaki.v1.templates', limit: 10 }
 });

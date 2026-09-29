@@ -44,5 +44,11 @@ Ofuregaki.parser = (() => {
     nodes.push(...atoms(text.slice(cursor)));
     return {nodes,warnings};
   }
-  return {parse, colors};
+  function findDirectEmoji(source) {
+    // Game stamps are {number}; ordinary Unicode emoji typed/pasted from a device are unsupported.
+    // Cover pictographs, flags and keycap emoji without treating Japanese marks such as ※ as emoji.
+    const pattern = /(?:\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?(?:\p{Emoji_Modifier})?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?(?:\p{Emoji_Modifier})?)*)/gu;
+    return [...source.matchAll(pattern)].map(match => match[0]);
+  }
+  return {parse, colors, findDirectEmoji};
 })();
