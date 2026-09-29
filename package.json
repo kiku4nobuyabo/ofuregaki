@@ -1,0 +1,12 @@
+{
+  "name": "ofuregaki-workshop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "test": "node tests/core.test.cjs"
+  },
+  "devDependencies": {
+    "vite": "^7.3.6"
+  }
+}
