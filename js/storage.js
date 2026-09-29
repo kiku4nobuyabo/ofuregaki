@@ -29,7 +29,7 @@ Ofuregaki.storage = (() => {
     const index=id === null ? -1 : items.findIndex(item=>item.id===id);
     if (id !== null && index < 0) throw new Error('保存先が別のタブで削除された可能性があります。別の保存名で保存し直してください。');
     if (index < 0 && items.length >= config.limit) throw new Error('保存できるのは10件までです。既存の下書き・マイテンプレから、この保存先の不要なものを削除してください。');
-    const record={id:id || (globalThis.crypto?.randomUUID?.() || `item-${Date.now()}-${Math.random().toString(36).slice(2)}`),name:values.name,title:values.title,body:Ofuregaki.newlines.fromGame(values.body),savedAt:new Date().toISOString()};
+    const record={id:id || (globalThis.crypto?.randomUUID?.() || `item-${Date.now()}-${Math.random().toString(36).slice(2)}`),name:values.name,title:values.title,body:values.body,savedAt:new Date().toISOString()};
     if(index<0) items.unshift(record); else items[index]=record;
     write(kind,items); return record;
   }

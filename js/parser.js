@@ -18,7 +18,7 @@ Ofuregaki.parser = (() => {
     for (let a=0;a<spans.length;a++) for (let b=a+1;b<spans.length && spans[b][0]<spans[a][1];b++) {
       invalid.add(spans[a][0]); invalid.add(spans[b][0]);
     }
-    if (invalid.size) warnings.push('色指定が重なっています。実機の挙動が未確認のため、重なった部分は記号を含めて表示しています。色指定を重ねずに使ってください。');
+    if (invalid.size) warnings.push('色指定が重なっています。色の記号が入れ子になったり交差したりしないよう、指定する範囲を確認してください。');
     for (const start of invalid) pairs.delete(start);
     function atoms(value) {
       const nodes = [];

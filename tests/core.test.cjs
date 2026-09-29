@@ -58,7 +58,23 @@ test('storage denied / quota exceeded reports failure without claiming save succ
  context.localStorage.setItem=original;
 });
 test('stamp IDs are unique and independent of artwork; common templates are empty',()=>{
- assert.equal(O.stamps.length,56);assert.equal(new Set(O.stamps.map(s=>s.id)).size,56);
+ assert.equal(O.stamps.length,145);assert.equal(new Set(O.stamps.map(s=>s.id)).size,145);
  assert.ok([13,30,46].every(id=>O.stamps.some(s=>s.id===id)));
  assert.equal(O.commonTemplates.length,0);
+});
+
+test('v0.1 storage remains readable and literal game newline codes survive save/load',()=>{
+ memory.clear();
+ memory.set('ofuregaki.v1.drafts',JSON.stringify({schemaVersion:1,items:[{id:'legacy',name:'旧下書き',title:'旧タイトル',body:'一行目\n二行目',savedAt:'2026-09-29T00:00:00.000Z'}]}));
+ assert.equal(O.storage.read('drafts')[0].id,'legacy');
+ const source='集合場所 725,1647\\n本文\n続き';
+ const record=O.storage.save('drafts',{name:'新下書き',title:'題',body:source});
+ assert.equal(O.storage.read('drafts').find(item=>item.id===record.id).body,source);
+ assert.equal(O.newlines.toGame(source),'集合場所 725,1647\\n本文\\n続き');
+ assert.equal(O.config.storage.draftsKey,'ofuregaki.v1.drafts');
+ assert.equal(O.config.storage.templatesKey,'ofuregaki.v1.templates');
+});
+test('palette includes every sequential ID through the last visible entry',()=>{
+ assert.deepEqual(plain(O.stamps.map(item=>item.id)),Array.from({length:145},(_,i)=>i+1));
+ assert.equal(O.stamps.at(-1).fallbackEmoji,'🈲');
 });

@@ -6,7 +6,7 @@ Ofuregaki.renderer = (() => {
     const def = Ofuregaki.stamps.find(item => String(item.id) === String(id));
     const el = document.createElement('span'); el.className = 'game-stamp';
     if (!def) { el.classList.add('stamp-unknown'); el.textContent = `{${id}}`; el.title = `未登録のスタンプ ID ${id}`; return el; }
-    el.title = `${def.label}（ID ${def.id}・仮表示）`;
+    el.title = `${def.label}（ID ${def.id}）`;
     const fallback = () => { el.replaceChildren(document.createTextNode(def.fallbackEmoji || '◉')); };
     fallback();
     // Only app-local image paths; external URLs are not requested.
@@ -23,7 +23,7 @@ Ofuregaki.renderer = (() => {
       if (node.type === 'text') result.append(document.createTextNode(node.value));
       if (node.type === 'stamp') result.append(stampElement(node.id));
       if (node.type === 'coordinate') {
-        const span=document.createElement('span'); span.className='game-coordinate'; span.textContent=node.value; span.title='座標（見た目のプレビュー）'; result.append(span);
+        const span=document.createElement('span'); span.className='game-coordinate'; span.textContent=`📍(${node.value})`; span.title=`座標 ${node.value}`; result.append(span);
       }
       if (node.type === 'color') {
         const span=document.createElement('span'); span.className=`syntax-${node.color}`; span.append(fragment(node.children)); result.append(span);

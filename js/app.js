@@ -8,14 +8,15 @@
   const previewStyle=document.documentElement.style;
   previewStyle.setProperty('--preview-font-size',`${O.config.preview.fontSize}px`);
   previewStyle.setProperty('--preview-line-height',O.config.preview.lineHeight);
-  let currentKind='drafts', linkedRecord=null;
+  let currentKind='editor', saveKind='drafts', linkedRecord=null;
   let savedSnapshot=JSON.stringify({title:'',body:''});
-  let selectedRange={start:0,end:0};
+  let selectedRange={start:0,end:0,direction:'none'};
+  let editorScrollTop=0;
   let toastTimer;
   let confirming=false;
   function values(){return {title:title.value,body:body.value};}
   function isDirty(){return JSON.stringify(values()) !== savedSnapshot;}
-  function rememberSelection(){selectedRange={start:body.selectionStart,end:body.selectionEnd};}
+  function rememberSelection(){selectedRange={start:body.selectionStart,end:body.selectionEnd,direction:body.selectionDirection};}
   function toast(message){clearTimeout(toastTimer);$('toast').textContent=message;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
   function showStorageError(message){$('storage-error').textContent=message;$('storage-error').hidden=!message;}
   function fitPreview(){
@@ -41,21 +42,14 @@
     if(unknown.length){const p=document.createElement('p');p.textContent=`未登録のスタンプ ${unknown.map(id=>`{${id}}`).join('、')} はIDで表示します。コピーする文字列は変えません。`;warningBox.append(p);warningBox.hidden=false;}
     $('character-count').textContent=`${Array.from(body.value).length}文字（記号を含む）`;
     $('copy-output').value=O.newlines.toGame(body.value,mode.value);
-    $('edit-state').textContent=isDirty() ? '未保存の変更あり' : (body.value || title.value ? '保存済み' : '未保存');
+    $('edit-state').textContent=isDirty() ? '未保存の変更あり' : (body.value || title.value ? (linkedRecord?'保存済み':'変更なし') : '未保存');
     requestAnimationFrame(fitPreview);
   }
-  function normalizeBody(){
-    const before=body.value;
-    const normalized=O.newlines.fromGame(before);
-    if(before!==normalized){
-      const start=O.newlines.fromGame(before.slice(0,body.selectionStart)).length;
-      const end=O.newlines.fromGame(before.slice(0,body.selectionEnd)).length;
-      body.value=normalized;body.setSelectionRange(start,end);
-    }
-    rememberSelection();refresh();
-  }
-  body.addEventListener('input',event=>{if(!event.isComposing) normalizeBody();});
-  body.addEventListener('compositionend',normalizeBody);
+  // Keep authored text intact: Enter creates LF; the button inserts the literal two-character code.
+  // Parsing and copying normalize both forms in newlines.js.
+  function onBodyInput(){rememberSelection();refresh();}
+  body.addEventListener('input',event=>{if(!event.isComposing) onBodyInput();});
+  body.addEventListener('compositionend',onBodyInput);
   title.addEventListener('input',refresh);
   mode.addEventListener('change',refresh);
   for(const event of ['select','keyup','click','pointerup','blur']) body.addEventListener(event,rememberSelection);
@@ -70,6 +64,8 @@
     if(selectionInside) body.setSelectionRange(start+selectionInside[0],start+selectionInside[1]);
     rememberSelection();refresh();
   }
+  $('newline-insert').addEventListener('mousedown',event=>event.preventDefault());
+  $('newline-insert').addEventListener('click',()=>replaceSelection('\\n'));
   for(const button of document.querySelectorAll('[data-color]')){
     button.addEventListener('mousedown',event=>event.preventDefault());
     button.addEventListener('click',()=>{
@@ -86,7 +82,7 @@
   function openDialog(id){$(id).showModal();}
   for(const button of document.querySelectorAll('[data-close]')) button.addEventListener('click',()=>button.closest('dialog').close());
   $('help-open').addEventListener('click',()=>openDialog('help-dialog'));
-  $('coordinate-open').addEventListener('click',()=>openDialog('coordinate-dialog'));
+  $('coordinate-open').addEventListener('click',()=>{$('coordinate-form').reset();openDialog('coordinate-dialog');});
   $('coordinate-form').addEventListener('submit',event=>{
     event.preventDefault();
     const x=$('coordinate-x').value.trim(),y=$('coordinate-y').value.trim();
@@ -128,35 +124,46 @@
   $('confirm-cancel').addEventListener('click',()=>$('confirm-dialog').close('cancel'));
   function listRecords(kind){return kind==='common' ? O.commonTemplates : O.storage.read(kind);}
   async function loadRecord(record,kind){
-    if((title.value || body.value) && !(await confirmAction('現在の編集内容を、この原稿に置き換えます。残したい内容は先に保存してください。','読み込む')))return;
-    title.value=record.title;body.value=O.newlines.fromGame(record.body);
+    if(isDirty() && !(await confirmAction('未保存の変更があります。この原稿を開くと、現在の変更は失われます。','エディタで開く')))return;
+    title.value=record.title;body.value=record.body;
     linkedRecord=kind==='common'?null:{kind,id:record.id,name:record.name};
     $('save-name').value=record.name;
-    // Common templates have no personal saved copy; warn on leaving until explicitly saved.
-    savedSnapshot=kind==='common'?JSON.stringify({title:'',body:''}):JSON.stringify(values());
-    selectedRange={start:body.value.length,end:body.value.length};refresh();toast('編集欄へ読み込みました。');
+    savedSnapshot=JSON.stringify(values());
+    selectedRange={start:body.value.length,end:body.value.length,direction:'none'};
+    editorScrollTop=0;selectTab($('tab-editor'));$('tab-editor').focus({preventScroll:true});refresh();toast('エディタで開きました。');
   }
   function renderSaved(){
     showStorageError('');
     for(const [kind,id] of [['drafts','draft-count'],['templates','template-count']]){
       try {$(id).textContent=`${O.storage.read(kind).length}/10`;}catch(error){$(id).textContent='読込不可';showStorageError(error.message);}
     }
-    const isCommon=currentKind==='common';$('save-form').hidden=isCommon;
-    $('save-button').textContent=currentKind==='templates'?'マイテンプレを保存':'下書きを保存';
-    $('save-name').placeholder=currentKind==='templates'?'テンプレートの名前':'保存名（例：10/10 開幕のお知らせ）';
-    const target=$('saved-list');target.replaceChildren();
+    for(const kind of ['drafts','templates','common']) renderList(kind);
+  }
+  function renderList(kind){
+    const isCommon=kind==='common';
+    const target=$(`list-${kind}`);
+    const opened=new Set([...target.querySelectorAll('details[open]')].map(item=>item.dataset.recordId));
+    target.replaceChildren();
     let records;
-    try{records=listRecords(currentKind);}catch(error){showStorageError(error.message);return;}
-    if(!records.length){const p=document.createElement('p');p.className='empty-list';p.textContent=isCommon?'現在、共通テンプレートは登録されていません。':currentKind==='drafts'?'保存した下書きがここに並びます。':'よく使う原稿を、自分用のひな型として保存できます。';target.append(p);}
+    try{records=listRecords(kind);}catch(error){showStorageError(error.message);return;}
+    if(!records.length){const p=document.createElement('p');p.className='empty-list';p.textContent=isCommon?'現在、共通テンプレートは登録されていません。':kind==='drafts'?'保存した下書きがここに並びます。':'よく使う原稿を、自分用のひな型として保存できます。';target.append(p);}
     for(const record of records){
-      const kind=currentKind;
-      const row=document.createElement('div');row.className='saved-item';
-      const info=document.createElement('div');info.className='saved-info';
+      const row=document.createElement('details');row.className='saved-entry';row.dataset.recordId=record.id;row.open=opened.has(record.id);
+      const summary=document.createElement('summary');
       const name=document.createElement('strong');name.textContent=record.name;
-      const date=document.createElement('small');date.textContent=isCommon?'一門共通テンプレート':new Date(record.savedAt).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-      info.append(name,date);row.append(info);
+      summary.append(name);row.append(summary);
+      const content=document.createElement('div');content.className='saved-entry-content';
+      const meta=document.createElement('dl');meta.className='record-meta';
+      const addMeta=(label,value)=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;meta.append(dt,dd);};
+      addMeta('保存名',record.name);addMeta('御触書タイトル',record.title || '（タイトルなし）');
+      if(!isCommon) addMeta('保存日時',new Date(record.savedAt).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}));
+      content.append(meta);
+      const bodyLabel=document.createElement('h4');bodyLabel.textContent='本文';content.append(bodyLabel);
+      const bodyView=document.createElement('div');bodyView.className='saved-body';bodyView.tabIndex=0;bodyView.setAttribute('aria-label',`${record.name}の本文`);
+      if(record.body) O.renderer.render(bodyView,O.parser.parse(record.body).nodes);else bodyView.textContent='（本文なし）';
+      content.append(bodyView);
       const actions=document.createElement('div');actions.className='saved-actions';
-      const load=document.createElement('button');load.type='button';load.textContent='読込';load.setAttribute('aria-label',`${record.name}を読み込む`);load.addEventListener('click',()=>loadRecord(record,kind));actions.append(load);
+      const load=document.createElement('button');load.type='button';load.textContent='エディタで開く';load.setAttribute('aria-label',`${record.name}をエディタで開く`);load.addEventListener('click',()=>loadRecord(record,kind));actions.append(load);
       if(!isCommon){
         const remove=document.createElement('button');remove.type='button';remove.className='delete';remove.textContent='削除';remove.setAttribute('aria-label',`${record.name}を削除`);
         remove.addEventListener('click',async()=>{
@@ -164,11 +171,16 @@
           try{O.storage.remove(kind,record.id);if(linkedRecord?.id===record.id && linkedRecord.kind===kind){linkedRecord=null;savedSnapshot=JSON.stringify({title:'',body:''});refresh();}renderSaved();toast('削除しました。');}catch(error){showStorageError(error.message);}
         });actions.append(remove);
       }
-      row.append(actions);target.append(row);
+      content.append(actions);row.append(content);target.append(row);
     }
   }
   const tabs=[...document.querySelectorAll('[role="tab"]')];
-  function selectTab(tab){currentKind=tab.dataset.kind;for(const item of tabs){item.setAttribute('aria-selected',String(item===tab));item.tabIndex=item===tab?0:-1;}$('saved-panel').setAttribute('aria-labelledby',tab.id);renderSaved();}
+  function selectTab(tab){
+    if(currentKind==='editor' && tab.dataset.kind!=='editor'){rememberSelection();editorScrollTop=body.scrollTop;}
+    currentKind=tab.dataset.kind;
+    for(const item of tabs){const active=item===tab;item.setAttribute('aria-selected',String(active));item.tabIndex=active?0:-1;$(item.getAttribute('aria-controls')).hidden=!active;}
+    if(currentKind==='editor'){body.setSelectionRange(selectedRange.start,selectedRange.end,selectedRange.direction);body.scrollTop=editorScrollTop;}
+  }
   for(const tab of tabs){
     tab.addEventListener('click',()=>selectTab(tab));
     tab.addEventListener('keydown',event=>{
@@ -178,9 +190,16 @@
       selectTab(tabs[index]);tabs[index].focus();
     });
   }
+  for(const button of document.querySelectorAll('[data-save-kind]')) button.addEventListener('click',()=>{
+    if(!title.value && !body.value){toast('タイトルか本文を入力してください。');return;}
+    saveKind=button.dataset.saveKind;
+    $('save-heading').textContent=saveKind==='templates'?'マイテンプレに保存':'下書きに保存';
+    $('save-name').value=linkedRecord?.kind===saveKind?linkedRecord.name:($('save-name').value || title.value);
+    $('save-error').hidden=true;openDialog('save-dialog');
+  });
   $('save-form').addEventListener('submit',async event=>{
     event.preventDefault();
-    const kind=currentKind, snapshot=values();
+    const kind=saveKind, snapshot=values();
     const name=$('save-name').value.trim();
     if(!name){toast('保存名を入力してください。');$('save-name').focus();return;}
     if(!snapshot.title && !snapshot.body){toast('タイトルか本文を入力してください。');return;}
@@ -189,12 +208,12 @@
     try{
       const record=O.storage.save(kind,{name,...snapshot},existing?.id || null);
       linkedRecord={kind,id:record.id,name};savedSnapshot=JSON.stringify(snapshot);
-      renderSaved();refresh();toast(kind==='templates'?'マイテンプレを保存しました。':'下書きを保存しました。');
-    }catch(error){showStorageError(error.message);toast(error.message);}
+      $('save-dialog').close();renderSaved();refresh();toast(kind==='templates'?'マイテンプレを保存しました。':'下書きを保存しました。');
+    }catch(error){showStorageError(error.message);$('save-error').textContent=error.message;$('save-error').hidden=false;}
   });
   $('new-document').addEventListener('click',async()=>{
     if((title.value || body.value) && !(await confirmAction('現在の編集内容を消して、新しい御触書を書きます。残したい内容は先に保存してください。','新しく書く')))return;
-    title.value='';body.value='';$('save-name').value='';linkedRecord=null;savedSnapshot=JSON.stringify(values());selectedRange={start:0,end:0};refresh();title.focus();
+    title.value='';body.value='';$('save-name').value='';linkedRecord=null;savedSnapshot=JSON.stringify(values());selectTab($('tab-editor'));selectedRange={start:0,end:0,direction:'none'};editorScrollTop=0;refresh();title.focus();
   });
   window.addEventListener('beforeunload',event=>{if(isDirty()){event.preventDefault();event.returnValue='';}});
   window.addEventListener('storage',event=>{if([O.config.storage.draftsKey,O.config.storage.templatesKey].includes(event.key)) renderSaved();});
