@@ -6,7 +6,7 @@ const root=path.resolve(__dirname,'..');
 const memory=new Map();
 const context=vm.createContext({window:{},console,Date,Math,crypto:require('node:crypto').webcrypto,localStorage:{getItem:k=>memory.has(k)?memory.get(k):null,setItem:(k,v)=>memory.set(k,v)}});
 context.window=context;
-for(const name of ['js/config.js','js/newlines.js','js/parser.js','js/storage.js','data/stamps.js','data/common-templates.js'])vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),context);
+for(const name of ['js/config.js','js/newlines.js','js/parser.js','js/storage.js','data/stamps.js','js/discord.js','data/common-templates.js'])vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),context);
 const O=context.Ofuregaki;
 const plain=x=>JSON.parse(JSON.stringify(x));
 test('all four colors, coordinates inside colors, and stamps parse together',()=>{
@@ -90,7 +90,13 @@ test('v0.3 limits, preview profiles, emoji detection, and corrected stamp mappin
  assert.deepEqual(plain(O.parser.findDirectEmoji('旗🇯🇵 キー1️⃣')),['🇯🇵','1️⃣']);
  assert.equal(O.parser.findDirectEmoji('【注意】123,456 {36}').length,0);
  const byId=id=>O.stamps.find(item=>item.id===id);
- assert.equal(byId(9).fallbackEmoji,'😙');
- assert.equal(byId(35).fallbackEmoji,'😚');
- assert.equal(byId(36).fallbackEmoji,'😘');
+ assert.equal(byId(9).fallbackEmoji,'😚');
+ assert.equal(byId(35).fallbackEmoji,'😘');
+ assert.equal(byId(36).fallbackEmoji,'😙');
+});
+
+
+test('Discord copy removes valid game color markup, converts stamps, and uses real line breaks',()=>{
+ assert.equal(O.discord.fromSource('&重要&\\n@集合@ 725,1647{9}'), '重要\n集合 725,1647😚');
+ assert.equal(O.discord.fromSource('料金は$100・未登録{999}・直接😊'), '料金は$100・未登録{999}・直接😊');
 });

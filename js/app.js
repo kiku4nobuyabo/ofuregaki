@@ -137,8 +137,16 @@
     if(ok) toast(`${part==='title'?'タイトル':'ゲーム貼付用の本文'}をコピーしました。`);
     else {$('manual-copy-text').value=text;openDialog('manual-copy-dialog');$('manual-copy-text').focus();$('manual-copy-text').select();}
   }
+  async function copyDiscord(){
+    if(!body.value){toast('本文を入力してください。');return;}
+    const text=O.discord.fromSource(body.value);
+    const ok=await O.clipboard.copy(text);
+    if(ok) toast('Discord用の本文をコピーしました。');
+    else {$('manual-copy-text').value=text;openDialog('manual-copy-dialog');$('manual-copy-text').focus();$('manual-copy-text').select();}
+  }
   $('copy-body').addEventListener('click',()=>copy('body'));
   $('copy-title').addEventListener('click',()=>copy('title'));
+  $('copy-discord').addEventListener('click',copyDiscord);
   function confirmAction(message,label){
     if(confirming) return Promise.resolve(false);
     confirming=true;
